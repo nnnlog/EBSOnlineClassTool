@@ -2,6 +2,7 @@ process.env.TZ = "Asia/Seoul";
 
 const readline = require("readline");
 const url = require("url");
+const axios = require("axios");
 
 require("chromedriver");
 const {Builder, By, Key, until} = require('selenium-webdriver');
@@ -20,9 +21,9 @@ const exit = async (code) => {
 	process.exit(code);
 };
 
-let baseURL;
+let baseURL, request;
 let driver;
-let schedule = [];
+let schedule = [], cookies = [];
 
 function startLecture() {
 	//TODO: axios를 이용해 예약 시간이 되면 강의 시작 신호만 전송
@@ -84,9 +85,15 @@ function list() {
 	}).then(href => console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host)));
 
 	await list();
+	cookies = await driver.manage().getCookies()
 	await driver.quit();
 
-	console.log(schedule)
+	console.log(schedule, cookies)
+	request = axios.create({
+		headers: {
+			Cookie: cookies.join("; ")
+		}
+	})
 
 	//TODO: web driver 끄고 axios만을 이용해 셰션 유지 및 강의 시간 조절
 
