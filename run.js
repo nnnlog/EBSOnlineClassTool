@@ -17,7 +17,8 @@ const input = query => new Promise(resolve => {
 });
 
 const exit = async (code) => {
-	await driver.session_.then(() => driver.quit()).catch(() => {});
+	await driver.session_.then(() => driver.quit()).catch(() => {
+	});
 	process.exit(code);
 };
 
@@ -82,18 +83,20 @@ function list() {
 	}
 	await driver.executeScript(() => {
 		return document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href;
-	}).then(href => console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host)));
+	}).then(async (href) => {
+		console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host));
+		await driver.executeScript(() => location.replace(document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href));
+		cookies = await driver.manage().getCookies();
+		await driver.executeScript(() => history.back());
+	});
 
 	await list();
-	cookies = await driver.manage().getCookies()
-	await driver.quit();
 
-	console.log(schedule, cookies)
 	request = axios.create({
 		headers: {
-			Cookie: cookies.join("; ")
+			cookie: cookies.filter(v => v.domain === baseURL.substr("https://".length)).map(data => `${data.name}=${data.value}`).join("; ")
 		}
-	})
+	});
 
 	//TODO: web driver 끄고 axios만을 이용해 셰션 유지 및 강의 시간 조절
 
