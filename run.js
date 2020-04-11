@@ -3,6 +3,7 @@ process.env.TZ = "Asia/Seoul";
 const readline = require("readline");
 const url = require("url");
 const axios = require("axios");
+const cheerio = require("cheerio");
 
 require("chromedriver");
 const {Builder, By, Key, until} = require('selenium-webdriver');
@@ -22,19 +23,74 @@ const exit = async (code) => {
 	process.exit(code);
 };
 
-let baseURL, request;
+let baseURL, session_url, request;
 let driver;
 let schedule = [], cookies = [];
 
-function startLecture() {
-	//TODO: axios를 이용해 예약 시간이 되면 강의 시작 신호만 전송
+async function startLecture(lecture_param, revivTime) {
+	let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${parseInt(revivTime * 0.01)}&lastRevivLC=${parseInt(revivTime * 0.01)}`)).data;
+	if (res.result !== "SUCCESS") {
+		return Promise.reject(res);
+	}
+	return Promise.resolve();
+}
+
+async function endLecture(lecture_param, revivTime) {
+	let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${parseInt(revivTime * 0.99)}&lastRevivLC=${parseInt(revivTime * 0.99)}&endButtonYn=Y`)).data;
+	if (res.result !== "SUCCESS") {
+		return Promise.reject(res);
+	}
+	return Promise.resolve();
+}
+
+async function readLectureData(url, atnlcNo) {
+	let $ = cheerio.load((await request.post(`${url.replace("hmpgLctrumView.do", "").split("?").shift()}/hmpgLctrumTabView.do`, url.split("?").pop() + `&atnlcNo=${atnlcNo}`)).data);
+	let lecture = [];
+
+	await Promise.all(Object.values($(".btn-md.fr.way")).map(async (element) => {
+		if (element.children === undefined || element.children[0] === undefined || element.children[0].data === undefined) return Promise.resolve();
+		if (element.children[0].data === "학습전" || element.children[0].data.indexOf("진행중") > -1) {
+			let params = $(element.parent).find("a").attr("href").replace(/(javascript:showNewLrnWindow\( |\);|')/gi, '').split(', ');
+			let data = (await request.post("/mypage/userlrn/userLrnMvpView.do", url.split("?").pop() + `&atnlcNo=${atnlcNo}&lctreSn=${params[0]}&cntntsTyCode=001`)).data;
+			let cut = data.indexOf('var revivTime = Number( "') + 'var revivTime = Number( "'.length;
+			let fin = data.indexOf('"', cut + 1);
+			let revivTime = data.substr(cut, fin - cut);
+
+			cut = data.indexOf('var cntntsTyCode = "') + 'var cntntsTyCode = "'.length;
+			fin = data.indexOf('";', cut + 1);
+			let cntntsTyCode = data.substr(cut, fin - cut);
+
+			lecture.push([url.split("?").pop() + `&atnlcNo=${atnlcNo}&lctreSn=${params[0]}&lctreSeCode=LCTRE&cntntsTyCode=${cntntsTyCode}&revivTime=${revivTime}`, parseInt(revivTime)]);
+		}
+
+		return Promise.resolve();
+	}));
+
+	return lecture;
 }
 
 function runSchedule() {
-	let fin = [];
-	//TODO: call startLecture();
-	//TODO: 예약 시간 + 영상 시간이 되면 종료 신호 전송
-	Promise.all(fin).then(() => {
+	let promise = [];
+
+	for (let playlist of schedule) {
+		for (let lecture of playlist[0]) {
+			promise.push(new Promise(r => setTimeout(() => {
+				console.log(`[${(new Date()).toLocaleString()} > 강의 시작 신호 전송 (${lecture[0]})`);
+				startLecture(...lecture).then(() => setTimeout(() => {
+					console.log(`[${(new Date()).toLocaleString()} > 강의 종료 신호 전송 (${lecture[0]})`);
+					endLecture(...lecture).catch(ret => {
+						console.log(`[${(new Date()).toLocaleString()} > 오류가 발생했습니다:`);
+						console.log(ret);
+					}).finally(() => r());
+				}, lecture[1] * 1000)).catch(ret => {
+					console.log(`[${(new Date()).toLocaleString()} > 오류가 발생했습니다:`);
+					console.log(ret);
+				});
+			}, Math.max(0, playlist[1] - Date.now()))));
+		}
+	}
+
+	Promise.all(promise).then(() => {
 		console.log("예약된 강의를 모두 수강하였습니다.")
 		exit(0);
 	});
@@ -45,12 +101,17 @@ function list() {
 		console.log("강의 예약에 대하여 자세한 부분은 README.md를 참고해주세요.")
 		console.log("예약하고자 하는 클래스 -> 강의 페이지에 들어갑니다.");
 		console.log("날짜 형식 : y-m-d h:m:s (예시: 2020-4-10 11:28:0)");
-		console.log("시간 형식 : h:m:s (예시: 11:28:0)");
+		console.log("시간 형식 : h:m:s (예시: 11:28:0 또는 11:28)");
 		let n;
 		while ((n = await input("계속 예약하시려면 원하는 강의에 들어가서 시간/날짜를, 더이상 예약할 강의가 없다면 N을 쳐주세요 : ")).toUpperCase() !== "N") {
 			let current = new Date();
-			if (isNaN(Date.parse(n)) && isNaN(Date.parse(n = `${current.getFullYear()}-${current.getMonth() + 1}-${current.getDate()} ${n}`))) {
+			if (isNaN(Date.parse(n)) && (n.trim() === "" || isNaN(Date.parse(n = `${current.getFullYear()}-${current.getMonth() + 1}-${current.getDate()} ${n}`)))) {
 				console.log("날짜 형식을 맞춰주세요.");
+				continue;
+			}
+			let time = Date.parse(n);
+			if (time <= Date.now()) {
+				console.log("올바르지 않은 시간입니다.");
 				continue;
 			}
 			let opened_window = await driver.getAllWindowHandles();
@@ -61,7 +122,11 @@ function list() {
 			await driver.switchTo().window(opened_window[1]);
 			let current_url = await driver.getCurrentUrl();
 			if (url.parse(current_url).path.split("/").pop().split("?").shift() === "hmpgLctrumView.do") {
-				schedule.push([current_url, Date.parse(n)]);
+				let temp;
+				schedule.push([temp = await readLectureData(current_url, await driver.executeScript(() => document.getElementById("atnlcNo").value)), time]);
+				console.log(`${temp.length}개의 강의를 ${time.toLocaleString()}에 예약했습니다.`)
+
+				console.log(temp)
 			} else {
 				console.log("1번 탭에는 클래스 목록, 2번 탭에는 예약할 강의가 오도록 해주세요.");
 			}
@@ -73,32 +138,38 @@ function list() {
 
 (async () => {
 	driver = await new Builder().forBrowser('chrome').build();
-	await driver.get("https://hoc.ebssw.kr/sso/loginView.do?loginType=onlineClass");
+	await driver.get("https://oc.ebssw.kr/");
 
 	await input("로그인을 완료하고 엔터를 눌러주세요.");
 	let current_url = await driver.getCurrentUrl();
-	if (current_url !== "https://hoc.ebssw.kr/onlineClass/reqst/onlineClassReqstInfoView.do") {
+	if (current_url.indexOf("onlineClassReqstInfoView.do") < 0) {
 		console.log("로그인이 되지 않았습니다.");
 		await exit(0);
 	}
+
 	await driver.executeScript(() => {
 		return document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href;
 	}).then(async (href) => {
+		session_url = href;
+
 		console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host));
 		await driver.executeScript(() => location.replace(document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href));
 		cookies = await driver.manage().getCookies();
 		await driver.executeScript(() => history.back());
 	});
 
-	await list();
-
 	request = axios.create({
 		headers: {
-			cookie: cookies.filter(v => v.domain === baseURL.substr("https://".length)).map(data => `${data.name}=${data.value}`).join("; ")
-		}
+			cookie: cookies.filter(v => v.domain === baseURL.substr("https://".length)).map(data => `${data.name}=${data.value}`).join("; ") + "; sso.authenticated=1; ",
+			'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+		},
+		baseURL: baseURL
 	});
 
-	//TODO: web driver 끄고 axios만을 이용해 셰션 유지 및 강의 시간 조절
+	await list();
+	await driver.quit();
+
+	//TODO: axios만을 이용해 셰션 유지
 
 	runSchedule();
 })();
