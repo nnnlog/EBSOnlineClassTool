@@ -141,6 +141,9 @@ function list() {
 	await driver.get("https://oc.ebssw.kr/");
 
 	await input("로그인을 완료하고 엔터를 눌러주세요.");
+	await driver.close();
+	let opened_window = await driver.getAllWindowHandles();
+	await driver.switchTo().window(opened_window[0]);
 	let current_url = await driver.getCurrentUrl();
 	if (current_url.indexOf("onlineClassReqstInfoView.do") < 0) {
 		console.log("로그인이 되지 않았습니다.");
@@ -155,7 +158,7 @@ function list() {
 		console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host));
 		await driver.executeScript(() => location.replace(document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href));
 		cookies = await driver.manage().getCookies();
-		await driver.executeScript(() => history.back());
+		await driver.executeScript(() => location.replace(location.origin + "/onlineClass/reqst/onlineClassReqstInfoView.do"));
 	});
 
 	request = axios.create({
