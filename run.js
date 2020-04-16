@@ -22,6 +22,15 @@ const exit = async (code) => {
 	});
 	process.exit(code);
 };
+let UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Whale/2.7.97.12 Safari/537.36";
+let Lang = "ko_KR";
+
+// 정상적인 웹 브라우저 모방 코드
+let ExtensionsOne = "Object.defineProperty(navigator, 'plugins', {get: function() {return[1, 2, 3, 4, 5]}})";
+let ExtensionsTwo = "Object.defineProperty(navigator, 'languages', {get: function() {return ['ko-KR', 'ko']}})";
+
+// headless 적용시 활성화 추천
+// let ExtensionsThree = "const getParameter = WebGLRenderingContext.getParameter;WebGLRenderingContext.prototype.getParameter = function(parameter) {if (parameter === 37445) {return 'NVIDIA Corporation'} if (parameter === 37446) {return 'NVIDIA GeForce GTX 980 Ti OpenGL Engine';}return getParameter(parameter);};";
 
 let baseURL, session_url, request;
 let driver;
@@ -137,14 +146,25 @@ function list() {
 }
 
 (async () => {
-	driver = await new Builder().forBrowser('chrome').build();
+	driver = await new Builder().withCapabilities(
+		{
+			'user-agent': UserAgent,
+			'lang': Lang
+		}
+	).forBrowser('chrome').build();
 	await driver.get("https://oc.ebssw.kr/");
+	await driver.executeScript(ExtensionsOne);
+	await driver.executeScript(ExtensionsTwo);	
+	// await driver.executeScript(ExtensionsThree);
 
 	await input("로그인을 완료하고 엔터를 눌러주세요.");
 	await driver.close();
 	let opened_window = await driver.getAllWindowHandles();
 	await driver.switchTo().window(opened_window[0]);
 	let current_url = await driver.getCurrentUrl();
+	await driver.executeScript(ExtensionsOne);
+	await driver.executeScript(ExtensionsTwo);
+	// await driver.executeScript(ExtensionsThree);
 	if (current_url.indexOf("onlineClassReqstInfoView.do") < 0) {
 		console.log("로그인이 되지 않았습니다.");
 		await exit(0);
@@ -156,6 +176,9 @@ function list() {
 		session_url = href;
 
 		console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host));
+		await driver.executeScript(ExtensionsOne);
+		await driver.executeScript(ExtensionsTwo);
+		// await driver.executeScript(ExtensionsThree);
 		await driver.executeScript(() => location.replace(document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href));
 		cookies = await driver.manage().getCookies();
 		await driver.executeScript(() => location.replace(location.origin + "/onlineClass/reqst/onlineClassReqstInfoView.do"));
