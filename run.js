@@ -45,10 +45,16 @@ async function startLecture(lecture_param, revivTime) {
 }
 
 async function endLecture(lecture_param, revivTime) {
-	let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${parseInt(revivTime * 0.99)}&lastRevivLC=${parseInt(revivTime * 0.99)}&endButtonYn=Y`)).data;
-	if (res.result !== "SUCCESS") {
-		return Promise.reject(res);
+	revivTime = parseInt(revivTime * 0.99);
+	while (revivTime) {
+		let sendTime = revivTime >= 120 ? 120 : revivTime;
+		revivTime -= sendTime;
+		let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${sendTime}&lastRevivLC=${sendTime}${!revivTime ? "&endButtonYn=Y" : ""}`)).data;
+		if (res.result !== "SUCCESS") {
+			return Promise.reject(res);
+		}
 	}
+
 	return Promise.resolve();
 }
 
