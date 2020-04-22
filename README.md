@@ -6,7 +6,6 @@ cd EBSOnlineClassTool
 npm install
 node run.js
 ```
-* 아직 개발 중입니다.
 
 ### 사용법
 * [https://blog.naver.com/sorisem4106/221902986240](https://blog.naver.com/sorisem4106/221902986240)
