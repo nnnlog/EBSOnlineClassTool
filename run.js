@@ -53,6 +53,7 @@ async function endLecture(lecture_param, revivTime) {
 		if (res.result !== "SUCCESS") {
 			return Promise.reject(res);
 		}
+		await new Promise(r => setTimeout(() => r(), 5000));
 	}
 
 	return Promise.resolve();
