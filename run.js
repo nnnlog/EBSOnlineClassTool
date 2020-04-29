@@ -87,6 +87,7 @@ function runSchedule() {
 					i && await new Promise(r => setTimeout(() => r(), 120 * 1000));
 				}
 				console.log(`[${(new Date()).toLocaleString()} > 강의 종료 신호 전송 (${lecture[0]})`);
+				r();
 			}, Math.max(0, playlist[1] - Date.now()))));
 		}
 	}
