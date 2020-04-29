@@ -79,8 +79,8 @@ function runSchedule() {
 		for (let lecture of playlist[0]) {
 			promise.push(new Promise(r => setTimeout(async () => {
 				console.log(`[${(new Date()).toLocaleString()} > 강의 시작 신호 전송 (${lecture[0]})`);
-				for (let i = Math.ceil(lecture[1] * 1000); i >= 0; i--) {
-					await sendSignal(...lecture, 120 * (Math.ceil(lecture[1] * 1000) - i)).catch(ret => {
+				for (let i = Math.ceil(lecture[1] / 120); i >= 0; i--) {
+					await sendSignal(...lecture, 120 * (Math.ceil(lecture[1] / 120) - i)).catch(ret => {
 						console.log(`[${(new Date()).toLocaleString()} > 오류가 발생했습니다:`);
 						console.log(ret);
 					});
