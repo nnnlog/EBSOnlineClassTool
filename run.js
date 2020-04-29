@@ -36,23 +36,11 @@ let baseURL, session_url, request;
 let driver;
 let schedule = [], cookies = [];
 
-async function startLecture(lecture_param, revivTime) {
-	let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${parseInt(revivTime * 0.01)}&lastRevivLC=${parseInt(revivTime * 0.01)}`)).data;
+async function sendSignal(lecture_param, revivTime) {
+	revivTime += 120;
+	let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${120}&lastRevivLC=${revivTime}`)).data;
 	if (res.result !== "SUCCESS") {
 		return Promise.reject(res);
-	}
-	return Promise.resolve();
-}
-
-async function endLecture(lecture_param, revivTime) {
-	revivTime = parseInt(revivTime * 0.99);
-	while (revivTime) {
-		let sendTime = revivTime >= 120 ? 120 : revivTime;
-		revivTime -= sendTime;
-		let res = (await request.post("/mypage/userlrn/lctreLrnSave.do", `${lecture_param}&lrnTime=${sendTime}&lastRevivLC=${sendTime}${!revivTime ? "&endButtonYn=Y" : ""}`)).data;
-		if (res.result !== "SUCCESS") {
-			return Promise.reject(res);
-		}
 	}
 
 	return Promise.resolve();
@@ -89,18 +77,16 @@ function runSchedule() {
 
 	for (let playlist of schedule) {
 		for (let lecture of playlist[0]) {
-			promise.push(new Promise(r => setTimeout(() => {
+			promise.push(new Promise(r => setTimeout(async () => {
 				console.log(`[${(new Date()).toLocaleString()} > 강의 시작 신호 전송 (${lecture[0]})`);
-				startLecture(...lecture).then(() => setTimeout(() => {
-					console.log(`[${(new Date()).toLocaleString()} > 강의 종료 신호 전송 (${lecture[0]})`);
-					endLecture(...lecture).catch(ret => {
+				for (let i = Math.ceil(lecture[1] * 1000); i >= 0; i--) {
+					await sendSignal(...lecture, 120 * (Math.ceil(lecture[1] * 1000) - i)).catch(ret => {
 						console.log(`[${(new Date()).toLocaleString()} > 오류가 발생했습니다:`);
 						console.log(ret);
-					}).finally(() => r());
-				}, lecture[1] * 1000)).catch(ret => {
-					console.log(`[${(new Date()).toLocaleString()} > 오류가 발생했습니다:`);
-					console.log(ret);
-				});
+					});
+					i && await new Promise(r => setTimeout(() => r(), 120 * 1000));
+				}
+				console.log(`[${(new Date()).toLocaleString()} > 강의 종료 신호 전송 (${lecture[0]})`);
 			}, Math.max(0, playlist[1] - Date.now()))));
 		}
 	}
@@ -160,7 +146,7 @@ function list() {
 	).forBrowser('chrome').build();
 	await driver.get("https://oc.ebssw.kr/");
 	await driver.executeScript(ExtensionsOne);
-	await driver.executeScript(ExtensionsTwo);	
+	await driver.executeScript(ExtensionsTwo);
 	// await driver.executeScript(ExtensionsThree);
 
 	await input("로그인을 완료하고 엔터를 눌러주세요.");
@@ -182,9 +168,6 @@ function list() {
 		session_url = href;
 
 		console.log("Detected Host : " + (baseURL = "https://" + url.parse(href).host));
-		await driver.executeScript(ExtensionsOne);
-		await driver.executeScript(ExtensionsTwo);
-		// await driver.executeScript(ExtensionsThree);
 		await driver.executeScript(() => location.replace(document.querySelectorAll(".list")[1].firstElementChild.firstElementChild.href));
 		cookies = await driver.manage().getCookies();
 		await driver.executeScript(() => location.replace(location.origin + "/onlineClass/reqst/onlineClassReqstInfoView.do"));
@@ -192,7 +175,7 @@ function list() {
 
 	request = axios.create({
 		headers: {
-			cookie: cookies.filter(v => v.domain === baseURL.substr("https://".length)).map(data => `${data.name}=${data.value}`).join("; ") + "; sso.authenticated=1; ",
+			cookie: cookies.filter(v => v.domain === baseURL.substr("https://".length)).map(data => `${data.name}=${data.value}`).join("; "),
 			'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
 		},
 		baseURL: baseURL
