@@ -10,7 +10,7 @@
   "dependencies": {
     "selenium-webdriver": "^4.0.0-alpha.7",
     "chromedriver": "^80.0.2",
-    "axios": "^0.19.2",
+    "axios": "^0.21.1",
     "cheerio": "^1.0.0-rc.3"
   }
 }
